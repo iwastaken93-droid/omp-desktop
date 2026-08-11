@@ -347,7 +347,7 @@ export function LandingPage() {
                 "Sessions & branching — fork any checkpoint, keep the whole tree.",
                 "Tool cards stream live — read, grep, edit, bash, task, lsp, debug.",
                 "Diffs land as reviewable patches before they hit disk.",
-                "Keyless demo mode — explore the surface before you add a key.",
+                "Real-only workspace — connect a provider before any model or session becomes available.",
               ].map((item) => (
                 <li key={item} className="flex items-start gap-2.5 text-[14px] text-ink-soft">
                   <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-omp-600" />

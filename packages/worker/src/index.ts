@@ -4,7 +4,6 @@ import type { ServerWebSocket } from "bun";
 import type { RpcNotification, RpcRequest, RpcResponse } from "@omp/shared";
 import { Catalog } from "./catalog";
 import { EngineFacade } from "./engines/engine";
-import { DemoEngine } from "./engines/demo";
 import { LiveEngine } from "./engines/live";
 import { RpcServer } from "./rpc";
 
@@ -49,12 +48,16 @@ export async function main(): Promise<void> {
     }
   };
 
-  const demo = new DemoEngine(sink);
   const live = new LiveEngine(sink);
-  const facade = new EngineFacade(live, demo, sink);
+  const facade = new EngineFacade(live, null, sink);
 
   const liveReady = await live.ensureReady();
-  const catalog = liveReady ? await Catalog.create(() => live.registry()) : Catalog.static();
+  // The catalog always comes from omp. When the SDK cannot load we expose an
+  // empty catalog rather than inventing models or falling back to a simulator.
+  const catalog = liveReady ? (live.registry().getAll().length ? await Catalog.create(() => live.registry(), async () => {
+    const oauthApi = await import("@oh-my-pi/pi-ai/oauth");
+    return oauthApi.getOAuthProviders().map((provider) => ({ id: String(provider.id), name: provider.name, storeCredentialsAs: provider.storeCredentialsAs ? String(provider.storeCredentialsAs) : undefined }));
+  }) : Catalog.empty()) : Catalog.empty();
 
   const rpc = new RpcServer(facade, catalog);
 
@@ -67,7 +70,7 @@ export async function main(): Promise<void> {
       if (url.pathname === "/api/health") {
         return Response.json({
           ok: true,
-          engine: facade.isUsable() ? "omp" : "demo",
+          engine: "omp",
           providersConfigured: facade.getConfiguredProviders(),
           catalogModels: catalog.allModels.length,
           ts: Date.now(),
@@ -93,7 +96,7 @@ export async function main(): Promise<void> {
     websocket: {
       open(ws) {
         clients.add(ws);
-        ws.send(JSON.stringify({ id: 0, result: { connected: true, engine: facade.isUsable() ? "omp" : "demo" } }));
+        ws.send(JSON.stringify({ id: 0, result: { connected: true, engine: "omp" } }));
       },
       async message(ws, raw) {
         let req: RpcRequest;
@@ -113,7 +116,7 @@ export async function main(): Promise<void> {
   });
 
   console.log(`[omp-worker] listening on http://0.0.0.0:${PORT}`);
-  console.log(`[omp-worker] engine: ${facade.isUsable() ? "live omp SDK" : "demo simulator"}`);
+  console.log(`[omp-worker] engine: live omp SDK${facade.isUsable() ? " (provider configured)" : " (awaiting provider configuration)"}`);
   console.log(`[omp-worker] catalog: ${catalog.allModels.length} models across ${catalog.snapshot().providers.length} providers`);
   if (STATIC_DIR)  console.log(`[omp-worker] serving static UI from ${STATIC_DIR}`);
 }

@@ -1,6 +1,7 @@
 import { GitBranch, Layers, ListChecks, Network, FileDiff, Braces, Brain, CircleDot } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useStudio, type RightPanel } from "../../lib/store";
+import type { ThinkingLevel } from "@omp/shared";
 import { Badge, Button, Segmented } from "../ui";
 import { ModelPicker } from "./ModelPicker";
 
@@ -13,8 +14,6 @@ const PANEL_TABS: { key: RightPanel; label: string; icon: typeof Layers }[] = [
   { key: "lsp", label: "LSP", icon: Brain },
 ];
 
-const THINKING_LEVELS = ["low", "medium", "high", "ultra"] as const;
-
 export function TopBar() {
   const detail = useStudio((s) => s.detail);
   const renameSession = useStudio((s) => s.renameSession);
@@ -22,6 +21,8 @@ export function TopBar() {
   const togglePlanMode = useStudio((s) => s.togglePlanMode);
   const thinkingLevel = useStudio((s) => s.thinkingLevel);
   const setThinking = useStudio((s) => s.setThinking);
+  const models = useStudio((s) => s.models);
+  const thinkingOptions = useStudio((s) => s.thinkingOptions);
   const rightPanel = useStudio((s) => s.rightPanel);
   const setRightPanel = useStudio((s) => s.setRightPanel);
   const busy = useStudio((s) => s.busy);
@@ -40,6 +41,12 @@ export function TopBar() {
   }, [editing]);
 
   const title = detail?.title ?? "New session";
+  const selectedModel = models.find((model) => model.id === detail?.model);
+  const supportedThinking = selectedModel?.thinkingLevels ?? [];
+  const visibleThinking = thinkingOptions.filter((option) => supportedThinking.includes(option.value));
+  const effectiveThinking = visibleThinking.some((option) => option.value === thinkingLevel)
+    ? thinkingLevel
+    : visibleThinking[0]?.value ?? "off";
 
   const commit = () => {
     setEditing(false);
@@ -91,14 +98,15 @@ export function TopBar() {
           ]}
         />
         <select
-          value={thinkingLevel}
-          onChange={(e) => void setThinking(e.target.value as (typeof THINKING_LEVELS)[number])}
-          className="h-8 rounded-lg border border-line-strong bg-surface px-2 text-[12.5px] font-medium text-ink outline-none transition-colors hover:border-omp-300"
-          title="Thinking level"
+          value={effectiveThinking}
+          disabled={visibleThinking.length === 0 || busy}
+          onChange={(e) => void setThinking(e.target.value as ThinkingLevel)}
+          className="h-8 rounded-lg border border-line-strong bg-surface px-2 text-[12.5px] font-medium text-ink outline-none transition-colors hover:border-omp-300 disabled:opacity-50"
+          title={visibleThinking.length ? "Thinking level supported by this model" : "This model exposes no thinking controls"}
         >
-          {THINKING_LEVELS.map((l) => (
-            <option key={l} value={l}>
-              {l} think
+          {visibleThinking.length === 0 ? <option value="off">no thinking control</option> : visibleThinking.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label} think
             </option>
           ))}
         </select>

@@ -81,9 +81,48 @@ export interface FileNode {
   size?: number;
 }
 
-export type ThinkingLevel = "low" | "medium" | "high" | "ultra";
+// Mirrors omp's actual selectors. A model may expose only a subset of these.
+export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "auto";
 
-export type EngineKind = "omp" | "demo";
+export interface ThinkingOption {
+  value: ThinkingLevel;
+  label: string;
+  description: string;
+}
+
+export interface ModelRoleInfo {
+  id: string;
+  name: string;
+  tag: string;
+  description: string;
+  configuredModel?: string;
+}
+
+export const OMP_MODEL_ROLES: ModelRoleInfo[] = [
+  { id: "default", name: "Default", tag: "DEFAULT", description: "Primary model for normal work" },
+  { id: "smol", name: "Fast", tag: "SMOL", description: "Quick, lightweight tasks" },
+  { id: "slow", name: "Thinking", tag: "SLOW", description: "Deep reasoning work" },
+  { id: "vision", name: "Vision", tag: "VISION", description: "Image-aware model" },
+  { id: "plan", name: "Architect", tag: "PLAN", description: "Planning and investigation" },
+  { id: "designer", name: "Designer", tag: "DESIGNER", description: "UI and product design" },
+  { id: "commit", name: "Commit", tag: "COMMIT", description: "Commit messages and summaries" },
+  { id: "tiny", name: "Tiny", tag: "TINY", description: "Small background tasks" },
+  { id: "task", name: "Subtask", tag: "TASK", description: "Delegated subagent work" },
+  { id: "advisor", name: "Advisor", tag: "ADVISOR", description: "Advice and review" },
+];
+
+export const OMP_THINKING_OPTIONS: ThinkingOption[] = [
+  { value: "off", label: "off", description: "No visible reasoning" },
+  { value: "minimal", label: "minimal", description: "Very brief reasoning" },
+  { value: "low", label: "low", description: "Light reasoning" },
+  { value: "medium", label: "medium", description: "Moderate reasoning" },
+  { value: "high", label: "high", description: "Deep reasoning" },
+  { value: "xhigh", label: "xhigh", description: "Extended reasoning" },
+  { value: "max", label: "max", description: "Maximum supported reasoning" },
+  { value: "auto", label: "auto", description: "Choose per prompt" },
+];
+
+export type EngineKind = "omp";
 
 export type WorkerStatus =
   | { state: "ok"; engine: EngineKind; providersConfigured: number }
@@ -106,7 +145,11 @@ export type RpcMethod =
   | "listModels"
   | "listProviders"
   | "setApiKey"
+  | "loginProvider"
+  | "submitOAuthInput"
   | "setModel"
+  | "setRole"
+  | "listRoles"
   | "setThinkingLevel"
   | "setPlanMode"
   | "getSettings"
@@ -149,6 +192,9 @@ export type AgentEvent =
   | { type: "diff_update"; diff: DiffFile }
   | { type: "model_changed"; model?: string }
   | { type: "notice"; message: string }
+  | { type: "auth_required"; provider: string; name: string; url: string; launchUrl?: string; instructions?: string }
+  | { type: "auth_progress"; provider: string; message: string }
+  | { type: "auth_complete"; provider: string; success: boolean; message: string }
   | { type: "error"; message: string };
 
 export interface RpcNotification {
@@ -178,6 +224,7 @@ export interface SessionSummary {
   updatedAt: number;
   createdAt: number;
   model?: string;
+  role?: string;
   messageCount: number;
   parentId?: string | null;
 }
@@ -189,6 +236,7 @@ export interface SessionDetail {
   createdAt: number;
   updatedAt: number;
   model?: string;
+  role?: string;
   parentId?: string | null;
   messages: ChatMessage[];
   plan: PlanTask[];
@@ -202,7 +250,11 @@ export interface ProviderInfo {
   name: string;
   envVar: string;
   configured: boolean;
+  credentialOrigin?: "runtime" | "config" | "oauth" | "api_key" | "env" | "fallback";
+  credentialHint?: string;
   oauth: boolean;
+  oauthName?: string;
+  authMethods?: ("api-key" | "oauth" | "local")[];
   category: "frontier" | "coding-plan" | "local" | "custom";
   modelCount: number;
 }
@@ -214,7 +266,16 @@ export interface ModelInfo {
   contextWindow?: number;
   maxTokens?: number;
   available: boolean;
+  reasoning?: boolean;
+  thinkingLevels?: ThinkingLevel[];
   cost?: { input?: number; output?: number };
+}
+
+export interface CatalogEntry {
+  providers: ProviderInfo[];
+  models: ModelInfo[];
+  roles: ModelRoleInfo[];
+  thinking: ThinkingOption[];
 }
 
 export interface AppSettings {
@@ -223,4 +284,15 @@ export interface AppSettings {
   showToolArguments: boolean;
   streamRules: boolean;
   memoryBackend: "off" | "local" | "hindsight";
+  theme?: string;
+  editor?: string;
+  transport?: string;
+  compaction?: boolean;
+  contextWindow?: number;
+  cycleOrder?: string[];
+  modelRoles?: Record<string, string>;
+  disabledProviders?: string[];
+  displaySmoothStreaming?: boolean;
+  advisorEnabled?: boolean;
+  symbolPreset?: string;
 }

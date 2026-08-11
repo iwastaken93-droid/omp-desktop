@@ -1,7 +1,6 @@
-// Generates packages/desktop/build/icon.png — a 256×256 rounded tile in the
-// OMP Studio palette (ink tile, paper glyph, green accent), matching the
-// favicon used by the web UI. Written with a minimal PNG encoder so no image
-// toolchain is required in CI.
+// Generates packages/desktop/build/icon.png — a 256×256 OMP gradient-bar mark
+// for Windows. Written with a minimal PNG encoder so no image toolchain is
+// required in CI.
 import { deflateSync } from "node:zlib";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -26,18 +25,21 @@ function inCircle(x: number, y: number, cx: number, cy: number, r: number): bool
   return dx * dx + dy * dy <= r * r;
 }
 
-function inGlyph(x: number, y: number): boolean {
-  // white "π"-like mark: bar + two legs (rounded caps)
-  if (x >= 62 && x <= 192 && y >= 88 && y <= 116) return true;
-  if (x >= 74 && x <= 100 && y >= 116 && y <= 178) return true;
-  if (x >= 156 && x <= 182 && y >= 116 && y <= 178) return true;
-  if (inCircle(x, y, 87, 178, 13) || inCircle(x, y, 169, 178, 13)) return true;
-  return false;
-}
-
-function inAccent(x: number, y: number): boolean {
-  // green vertical accent bar on the right
-  return inRoundedRect(x, y, 200, 88, 228, 178, 14);
+function logoColor(x: number, y: number): [number, number, number] | null {
+  // The OMP mark is a clean, colorful T made from soft-edged vertical bars.
+  // Keep the geometry bold enough to survive Windows' small taskbar sizes.
+  const inTop = inRoundedRect(x, y, 48, 62, 208, 104, 18);
+  const inStem = inRoundedRect(x, y, 108, 88, 148, 198, 18);
+  if (!inTop && !inStem) return null;
+  const palette: [number, number, number][] = [
+    [45, 212, 191],
+    [59, 130, 246],
+    [124, 92, 255],
+    [236, 72, 153],
+    [251, 146, 60],
+  ];
+  const index = Math.max(0, Math.min(palette.length - 1, Math.floor(((x - 48) / 160) * palette.length)));
+  return palette[index];
 }
 
 // ---- pixel fill -----------------------------------------------------------
@@ -59,16 +61,9 @@ for (let y = 0; y < SIZE; y++) {
       b = Math.round(23 + (36 - 23) * t);
       a = 255;
     }
-    if (a > 0 && inGlyph(x, y)) {
-      r = 255;
-      g = 255;
-      b = 255;
-      a = 255;
-    }
-    if (a > 0 && inAccent(x, y)) {
-      r = 34;
-      g = 197;
-      b = 94;
+    const logo = a > 0 ? logoColor(x, y) : null;
+    if (logo) {
+      [r, g, b] = logo;
       a = 255;
     }
 

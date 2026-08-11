@@ -13,9 +13,10 @@ A clean, light, **Codex-style desktop app for [Oh My Pi (omp)](https://omp.sh)**
 - **Diffs & files** — patches preview in a diff viewer; the Files panel browses the workspace.
 - **Memory & skills** — `retain`/`recall` style memory entries surface in the Memory panel.
 - **LSP & debugger panels** — status and last activity from the agent's `lsp`/`debug` tool calls.
-- **60+ providers, ~4,200 models** — the full omp catalog, browsable in Settings, with per-provider key status.
-- **`ultrathink`** — type the magic keyword and the composer glows rainbow while the agent thinks at maximum effort.
-- **Keyless demo mode** — no credentials? A simulated agent still demonstrates the whole surface; add a provider key and new sessions run on the real engine.
+- **60+ providers, ~4,200 models** — the omp catalog is browsable in Settings, while the model picker shows only models available through configured credentials.
+- **Native provider login** — API keys, local runtimes, and omp’s OAuth/device-code flows each get the right setup path, including browser authorization and manual callback input.
+- **Real-only sessions** — there is no simulator fallback: with no configured provider the workspace stays empty and explains exactly how to connect one.
+- **`ultrathink`** — type the magic keyword and the composer glows rainbow while the real agent thinks at maximum effort.
 
 ## Architecture
 
@@ -34,10 +35,9 @@ scripts/
 
 The worker exposes a WebSocket JSON-RPC API (`/ws`) plus `/api/health` and `/api/catalog`. The browser always talks to a single origin: in dev, Vite proxies `/api` and `/ws` to the worker; in preview/production, the worker serves the built UI itself.
 
-**Two engines:**
+**Engine:**
 
-- **Live** — `LiveEngine` embeds the omp SDK: `ModelRegistry`, `discoverAuthStorage`, `createAgentSession`, `SessionManager.inMemory()`, session events streamed 1:1 to the UI. Used when at least one provider has credentials.
-- **Demo** — `DemoEngine` simulates a realistic agent (reads real repo files, streams markdown, runs tool cards, plans, subagents, memory) so the app is fully explorable without keys.
+- **Live only** — `LiveEngine` embeds the omp SDK: `ModelRegistry`, `discoverAuthStorage`, `createAgentSession`, `SessionManager.inMemory()`, session events streamed 1:1 to the UI. Sessions cannot be created until a provider is actually configured.
 
 ## Getting started
 
@@ -73,7 +73,7 @@ In Freebuff, paste keys into the **API Keys** tab so they're injected as env var
 | DeepSeek | `DEEPSEEK_API_KEY` |
 | … | `*_API_KEY` (see Settings → Providers for each) |
 
-OAuth providers (Cursor, GitHub Copilot, Codex, Gemini CLI, SuperGrok…) sign in through your provider account.
+OAuth providers (Cursor, GitHub Copilot, Codex, Gemini CLI, SuperGrok…) use omp’s native login flow from Settings. OMP Studio opens the provider authorization URL, forwards progress, and accepts a manual code/redirect URL when that provider requires it.
 
 ## Scripts
 

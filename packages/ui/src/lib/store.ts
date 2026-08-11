@@ -5,6 +5,8 @@ import type {
   FileNode,
   ModelInfo,
   ProviderInfo,
+  ModelRoleInfo,
+  ThinkingOption,
   RpcNotification,
   SessionDetail,
   SessionSummary,
@@ -36,6 +38,9 @@ interface StudioState {
   fileTree: FileNode[];
   providers: ProviderInfo[];
   models: ModelInfo[];
+  roles: ModelRoleInfo[];
+  thinkingOptions: ThinkingOption[];
+  oauthFlow: { provider: string; name: string; url: string; launchUrl?: string; instructions?: string; progress?: string } | null;
   notices: Notice[];
 
   init(): Promise<void>;
@@ -118,6 +123,18 @@ export const useStudio = create<StudioState>((set, get) => {
     }
 
     switch (data.type) {
+      case "auth_required":
+        set({ oauthFlow: { provider: data.provider, name: data.name, url: data.url, launchUrl: data.launchUrl, instructions: data.instructions } });
+        pushNotice(`${data.name} sign-in is ready. Open the authorization page to continue.`, "info");
+        break;
+      case "auth_progress":
+        set((st) => ({ oauthFlow: st.oauthFlow?.provider === data.provider ? { ...st.oauthFlow, progress: data.message } : st.oauthFlow }));
+        break;
+      case "auth_complete":
+        set({ oauthFlow: null });
+        pushNotice(data.message, data.success ? "info" : "error");
+        if (data.success) void loadCatalog();
+        break;
       case "session_created": {
         const s: SessionSummary = {
           id: data.session.id,
@@ -252,7 +269,7 @@ export const useStudio = create<StudioState>((set, get) => {
       const res = await fetch("/api/catalog");
       if (res.ok) {
         const cat = await res.json();
-        set({ providers: cat.providers ?? [], models: cat.models ?? [] });
+        set({ providers: cat.providers ?? [], models: cat.models ?? [], roles: cat.roles ?? [], thinkingOptions: cat.thinking ?? [] });
       }
     } catch {
       /* preview may start before worker; retried on reconnect */
@@ -270,7 +287,7 @@ export const useStudio = create<StudioState>((set, get) => {
 
   return {
     connected: false,
-    engine: "demo",
+    engine: "omp",
     providersConfigured: 0,
     engineHint: "",
     sessions: [],
@@ -284,6 +301,9 @@ export const useStudio = create<StudioState>((set, get) => {
     fileTree: [],
     providers: [],
     models: [],
+    roles: [],
+    thinkingOptions: [],
+    oauthFlow: null,
     notices: [],
 
     async init() {
@@ -307,11 +327,13 @@ export const useStudio = create<StudioState>((set, get) => {
         } catch {
           /* ignore */
         }
-        // If nothing is active, open (or create) a session.
-        const { sessions, activeSessionId } = get();
+        // Sessions are real omp sessions only. With no configured provider the
+        // studio stays empty and points the user to Settings instead of creating
+        // a simulator session.
+        const { sessions, activeSessionId, models } = get();
         if (sessions.length && !activeSessionId) {
           await get().selectSession(sessions[0].id);
-        } else if (!sessions.length) {
+        } else if (!sessions.length && models.length > 0) {
           await get().createSession();
         }
       };

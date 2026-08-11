@@ -58,6 +58,7 @@ export class LiveEngine implements AgentEngine {
   private modelRegistry: any = null;
   private catalog: Catalog | null = null;
   private runtimeKeys = new Map<string, string>();
+  private oauthInputs = new Map<string, { resolve: (value: string) => void; reject: (reason?: unknown) => void }>();
   private initError: string | null = null;
 
   constructor(private sink: EngineEventSink) {}
@@ -96,6 +97,36 @@ export class LiveEngine implements AgentEngine {
     return "live omp engine — sessions are driven by the real @oh-my-pi/pi-coding-agent SDK.";
   }
 
+  getSettings(): Record<string, unknown> {
+    const settings = (this.sdk as any)?.settings;
+    const read = (key: string, fallback: unknown) => {
+      try {
+        return settings?.get?.(key) ?? fallback;
+      } catch {
+        return fallback;
+      }
+    };
+    let modelRoles: Record<string, string> = {};
+    try {
+      modelRoles = { ...(settings?.getModelRoles?.() ?? {}) };
+    } catch {
+      /* SDK settings may not be initialized in a failed bootstrap. */
+    }
+    return {
+      theme: read("theme.light", "light"),
+      editor: "system",
+      transport: "local Bun worker",
+      compaction: read("compaction.enabled", true),
+      contextWindow: read("contextWindow", 0),
+      cycleOrder: read("cycleOrder", ["smol", "default", "slow"]),
+      modelRoles,
+      disabledProviders: read("disabledProviders", []),
+      displaySmoothStreaming: read("display.smoothStreaming", true),
+      advisorEnabled: read("advisor.enabled", false),
+      symbolPreset: read("symbolPreset", "unicode"),
+    };
+  }
+
   isUsable(): boolean {
     if (this.initError) return false;
     return this.runtimeKeys.size > 0 || this.providerEnvKeys().length > 0;
@@ -121,7 +152,15 @@ export class LiveEngine implements AgentEngine {
         for (const [provider, key] of this.runtimeKeys) {
           this.authStorage.setRuntimeApiKey(provider, key);
         }
-        this.catalog = await Catalog.create(() => this.modelRegistry);
+        const oauthApi = await import("@oh-my-pi/pi-ai/oauth");
+        this.catalog = await Catalog.create(
+          () => this.modelRegistry,
+          async () => oauthApi.getOAuthProviders().map((provider) => ({
+            id: String(provider.id),
+            name: provider.name,
+            storeCredentialsAs: provider.storeCredentialsAs ? String(provider.storeCredentialsAs) : undefined,
+          })),
+        );
       } catch (err) {
         this.initError = err instanceof Error ? err.message : String(err);
         console.error("[live] engine init failed:", err);
@@ -134,6 +173,11 @@ export class LiveEngine implements AgentEngine {
   async ensureReady(): Promise<boolean> {
     await this.ensureInit();
     return !this.initError;
+  }
+
+  async refreshCatalog(): Promise<void> {
+    await this.modelRegistry?.refresh?.();
+    await this.catalog?.refresh?.();
   }
 
   /** Registry access for the Catalog (empty when the SDK is unavailable). */
@@ -151,8 +195,7 @@ export class LiveEngine implements AgentEngine {
     this.persistKeys();
     if (this.authStorage) {
       this.authStorage.setRuntimeApiKey(provider, clean);
-      void this.modelRegistry?.refresh().catch(() => {});
-      void this.catalog?.refresh().catch(() => {});
+      void this.refreshCatalog().catch(() => {});
     }
     return true;
   }
@@ -160,6 +203,63 @@ export class LiveEngine implements AgentEngine {
   /** Optional-interface implementation used by the RPC layer. */
   setApiKey(provider: string, key: string): boolean {
     return this.setRuntimeKey(provider, key);
+  }
+
+  /**
+   * Starts omp's native OAuth flow. The worker never handles credentials in the
+   * browser: it forwards the authorization URL and manual prompts as events,
+   * while AuthStorage owns token exchange and durable storage.
+   */
+  async loginProvider(provider: string): Promise<{ provider: string; name: string; started: boolean }> {
+    await this.ensureInit();
+    if (!this.authStorage) throw new Error("omp auth storage is unavailable");
+    const oauthApi = await import("@oh-my-pi/pi-ai/oauth");
+    const info = oauthApi.getOAuthProviders().find((item) => String(item.id) === provider);
+    if (!info) throw new Error(`No OAuth login is available for ${provider}`);
+
+    const waitForInput = (prompt: string): Promise<string> => new Promise((resolve, reject) => {
+      this.oauthInputs.get(provider)?.reject(new Error("OAuth input superseded by a new prompt"));
+      this.oauthInputs.set(provider, { resolve, reject });
+      this.sink("", { type: "auth_progress", provider, message: prompt });
+    });
+
+    try {
+      this.sink("", { type: "auth_progress", provider, message: `Starting ${info.name} sign-in…` });
+      await this.authStorage.login(provider, {
+        onAuth: (auth: { url: string; launchUrl?: string; instructions?: string }) => {
+          this.sink("", {
+            type: "auth_required",
+            provider,
+            name: info.name,
+            url: auth.url,
+            launchUrl: auth.launchUrl,
+            instructions: auth.instructions,
+          });
+        },
+        onProgress: (message: string) => this.sink("", { type: "auth_progress", provider, message }),
+        onPrompt: (prompt: { message: string }) => waitForInput(prompt.message),
+        onManualCodeInput: () => waitForInput("Paste the authorization code or redirect URL"),
+      });
+      await this.authStorage.reload?.();
+      await this.modelRegistry?.refresh?.();
+      await this.catalog?.refresh?.();
+      this.sink("", { type: "auth_complete", provider, success: true, message: `${info.name} is connected.` });
+      return { provider, name: info.name, started: true };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.sink("", { type: "auth_complete", provider, success: false, message });
+      throw err;
+    } finally {
+      this.oauthInputs.delete(provider);
+    }
+  }
+
+  submitOAuthInput(provider: string, input: string): boolean {
+    const pending = this.oauthInputs.get(provider);
+    if (!pending) return false;
+    this.oauthInputs.delete(provider);
+    pending.resolve(input);
+    return true;
   }
 
   private providerEnvKeys(): string[] {

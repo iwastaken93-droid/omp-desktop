@@ -1,4 +1,4 @@
-import type { ModelInfo, ProviderInfo } from "@omp/shared";
+import { OMP_MODEL_ROLES, OMP_THINKING_OPTIONS, type ModelInfo, type ProviderInfo, type ThinkingLevel } from "@omp/shared";
 
 // Curated human names + env var conventions for the omp provider catalog.
 // Anything not listed falls back to a readable slug + `<ID>_API_KEY`.
@@ -97,6 +97,8 @@ function slugToCategory(id: string): ProviderInfo["category"] {
 export interface CatalogEntry {
   providers: ProviderInfo[];
   models: ModelInfo[];
+  roles: typeof OMP_MODEL_ROLES;
+  thinking: typeof OMP_THINKING_OPTIONS;
 }
 
 const STATIC_MODELS: ModelRef[] = [
@@ -141,6 +143,8 @@ export interface ModelRef {
   contextWindow?: number;
   maxTokens?: number;
   cost?: { input?: number; output?: number };
+  reasoning?: boolean;
+  thinkingLevels?: ThinkingLevel[];
 }
 
 /**
@@ -152,13 +156,18 @@ export class Catalog {
   private availableIds = new Set<string>();
   private refreshPromise: Promise<void> | null = null;
   private failed = false;
+  private oauth = new Map<string, { name: string; storeCredentialsAs?: string }>();
 
   constructor(
     private loadModels: () => Promise<ModelRef[]>,
     private loadAvailable: () => Promise<string[]>,
+    private loadOAuth?: () => Promise<{ id: string; name: string; storeCredentialsAs?: string }[]>,
   ) {}
 
-  static async create(getRegistry: () => { getAll(): unknown[]; getAvailable(): unknown[] }): Promise<Catalog> {
+  static async create(
+    getRegistry: () => { getAll(): unknown[]; getAvailable(): unknown[] },
+    loadOAuth?: () => Promise<{ id: string; name: string; storeCredentialsAs?: string }[]>,
+  ): Promise<Catalog> {
     const catalog = new Catalog(
       async () => {
         const all = getRegistry().getAll() as any[];
@@ -172,12 +181,22 @@ export class Catalog {
           cost: m.cost && typeof m.cost === "object"
             ? { input: typeof m.cost.input === "number" ? m.cost.input : undefined, output: typeof m.cost.output === "number" ? m.cost.output : undefined }
             : undefined,
+          reasoning: m.reasoning === true,
+          thinkingLevels: Array.isArray(m.thinking?.efforts)
+            ? [
+                ...(m.thinking.requiresEffort ? [] : ["off"]),
+                ...m.thinking.efforts.map((level: unknown) => String(level)).filter((level: string): level is ThinkingLevel =>
+                  ["minimal", "low", "medium", "high", "xhigh", "max"].includes(level),
+                ),
+              ]
+            : [],
         }));
       },
       async () => {
         const avail = getRegistry().getAvailable() as any[];
         return avail.map((m) => String(m.id ?? ""));
       },
+      loadOAuth,
     );
     await catalog.refresh();
     return catalog;
@@ -190,6 +209,10 @@ export class Catalog {
         const [models, available] = await Promise.all([this.loadModels(), this.loadAvailable()]);
         this.models = models;
         this.availableIds = new Set(available);
+        if (this.loadOAuth) {
+          const oauth = await this.loadOAuth();
+          this.oauth = new Map(oauth.map((provider) => [provider.id, provider]));
+        }
         this.failed = false;
       } catch (err) {
         this.failed = true;
@@ -203,15 +226,9 @@ export class Catalog {
     }
   }
 
-  /** Static catalog used when the omp SDK cannot be loaded. */
-  static static(): Catalog {
-    const rows: ModelRef[] = STATIC_MODELS;
-    const catalog = new Catalog(
-      async () => rows,
-      async () => [] as string[],
-    );
-    catalog.models = rows;
-    return catalog;
+  /** Empty catalog used when the omp SDK cannot be loaded; never invents models. */
+  static empty(): Catalog {
+    return new Catalog(async () => [], async () => []);
   }
 
   get failedToLoad(): boolean {
@@ -245,26 +262,35 @@ export class Catalog {
           name: slugToName(id),
           envVar: slugToEnvVar(id),
           configured,
-          oauth: !!PROVIDER_META[id]?.oauth,
+          oauth: this.oauth.has(id) || !!PROVIDER_META[id]?.oauth,
+          oauthName: this.oauth.get(id)?.name,
+          authMethods: [
+            ...(this.oauth.has(id) || PROVIDER_META[id]?.oauth ? ["oauth" as const] : []),
+            ...(slugToCategory(id) === "local" ? ["local" as const] : ["api-key" as const]),
+          ],
           category: slugToCategory(id),
-          modelCount: models.length,
+          modelCount: models.filter((m) => this.availableIds.has(m.id)).length,
         };
       })
       .sort((a, b) => a.name.localeCompare(b.name));
 
+    // The model selector is intentionally capability-driven: unconfigured
+    // providers never leak their catalog rows into the app.
     const models: ModelInfo[] = this.models
-      .filter((m) => m.provider && m.id)
+      .filter((m) => m.provider && m.id && this.availableIds.has(m.id))
       .map((m) => ({
         id: m.id,
         provider: m.provider,
         name: m.name,
         contextWindow: m.contextWindow,
         maxTokens: m.maxTokens,
-        available: this.availableIds.has(m.id),
+        available: true,
+        reasoning: m.reasoning,
+        thinkingLevels: m.thinkingLevels,
         cost: m.cost,
       }))
       .sort((a, b) => a.provider.localeCompare(b.provider) || a.name.localeCompare(b.name));
 
-    return { providers, models };
+    return { providers, models, roles: OMP_MODEL_ROLES, thinking: OMP_THINKING_OPTIONS };
   }
 }

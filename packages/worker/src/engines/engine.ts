@@ -34,7 +34,7 @@ export interface CreateInput {
   entryId?: string;
 }
 
-/** The surface every engine (live omp SDK or demo simulator) implements. */
+/** The surface implemented by the live omp SDK engine. */
 export interface AgentEngine {
   readonly kind: EngineKind;
   readonly name: string;
@@ -58,20 +58,25 @@ export interface AgentEngine {
   getFileTree(): FileNode[];
   getEngineHint(): string;
   setApiKey?(provider: string, key: string): boolean;
+  loginProvider?(provider: string): Promise<{ provider: string; name: string; started: boolean }>;
+  submitOAuthInput?(provider: string, input: string): boolean;
   getConfiguredProviders?(): number;
+  refreshCatalog?(): Promise<void>;
+  getCatalog?(): unknown;
+  getSettings?(): Record<string, unknown>;
   dispose(): Promise<void>;
 }
 
 /** Routes sessions to whichever engine created them. */
 export class EngineFacade implements AgentEngine {
-  readonly kind: EngineKind = "demo";
-  readonly name = "hybrid";
+  readonly kind: EngineKind = "omp";
+  readonly name = "omp";
 
   private owners = new Map<string, EngineKind>();
 
   constructor(
     private live: AgentEngine | null,
-    private demo: AgentEngine,
+    private demo: AgentEngine | null,
     private sink: EngineEventSink,
   ) {}
 
@@ -82,8 +87,7 @@ export class EngineFacade implements AgentEngine {
   private forSession(id: string): AgentEngine | null {
     const kind = this.owners.get(id);
     if (kind === "omp" && this.live) return this.live;
-    if (kind === "demo") return this.demo;
-    // Unknown session: prefer whichever engine knows it.
+    // Unknown session: prefer whichever live engine knows it.
     return this.engines().find((e) => e.listSessions().some((s) => s.id === id)) ?? null;
   }
 
@@ -92,7 +96,8 @@ export class EngineFacade implements AgentEngine {
   }
 
   engineForNewSession(): AgentEngine {
-    return this.isUsable() ? this.live! : this.demo;
+    if (this.isUsable() && this.live) return this.live;
+    throw new Error("No provider is configured. Add an API key or sign in with an OAuth provider in Settings.");
   }
 
   listSessions(): SessionSummary[] {
@@ -178,12 +183,12 @@ export class EngineFacade implements AgentEngine {
   }
 
   getFileTree(): FileNode[] {
-    return this.demo.getFileTree();
+    return this.live?.getFileTree() ?? [];
   }
 
   getEngineHint(): string {
     if (this.isUsable()) return this.live!.getEngineHint();
-    return this.demo.getEngineHint();
+    return "No provider configured — add an API key or sign in with an OAuth provider to start a real omp session.";
   }
 
   setApiKey(provider: string, key: string): boolean {
@@ -195,6 +200,27 @@ export class EngineFacade implements AgentEngine {
 
   getConfiguredProviders(): number {
     return this.live?.getConfiguredProviders?.() ?? 0;
+  }
+
+  async refreshCatalog(): Promise<void> {
+    await this.live?.refreshCatalog?.();
+  }
+
+  async loginProvider(provider: string): Promise<{ provider: string; name: string; started: boolean }> {
+    if (!this.live?.loginProvider) throw new Error("OAuth login is unavailable until the omp SDK is ready.");
+    return this.live.loginProvider(provider);
+  }
+
+  submitOAuthInput(provider: string, input: string): boolean {
+    return this.live?.submitOAuthInput?.(provider, input) ?? false;
+  }
+
+  getCatalog(): unknown {
+    return this.live?.getCatalog?.() ?? null;
+  }
+
+  getSettings(): Record<string, unknown> {
+    return this.live?.getSettings?.() ?? {};
   }
 
   async dispose(): Promise<void> {

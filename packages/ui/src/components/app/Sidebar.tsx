@@ -106,7 +106,6 @@ export function Sidebar() {
   const sessions = useStudio((s) => s.sessions);
   const createSession = useStudio((s) => s.createSession);
   const openSettings = useStudio((s) => s.openSettings);
-  const engine = useStudio((s) => s.engine);
   const connected = useStudio((s) => s.connected);
   const providersConfigured = useStudio((s) => s.providersConfigured);
 
@@ -161,7 +160,7 @@ export function Sidebar() {
         <div className="mb-2 flex items-center gap-2">
           <span className={`h-2 w-2 rounded-full ${connected ? "bg-omp-500" : "animate-pulse bg-amber-500"}`} />
           <span className="text-[11.5px] font-medium text-ink-soft">
-            {connected ? (engine === "omp" ? `${providersConfigured} provider${providersConfigured === 1 ? "" : "s"} connected` : "Demo engine") : "connecting…"}
+            {connected ? `${providersConfigured} provider${providersConfigured === 1 ? "" : "s"} configured` : "connecting…"}
           </span>
         </div>
         <button
@@ -170,7 +169,7 @@ export function Sidebar() {
         >
           <Settings2 size={13} />
           Settings &amp; providers
-          {engine === "demo" && <Badge tone="green" className="ml-auto">60+ providers</Badge>}
+          {providersConfigured === 0 && <Badge tone="amber" className="ml-auto">configure a provider</Badge>}
         </button>
       </div>
     </aside>

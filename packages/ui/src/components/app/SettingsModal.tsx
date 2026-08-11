@@ -1,12 +1,12 @@
-import { CheckCircle2, ChevronDown, ChevronRight, KeyRound, PlugZap, Search, Settings2, ShieldCheck } from "lucide-react";
-import { useMemo, useState } from "react";
-import type { ProviderInfo } from "@omp/shared";
+import { CheckCircle2, ChevronDown, ChevronRight, ExternalLink, KeyRound, PlugZap, Search, Settings2, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import type { AppSettings, ProviderInfo } from "@omp/shared";
 import { rpc } from "../../lib/rpc";
 import { useStudio } from "../../lib/store";
 import { formatNumber } from "../../lib/format";
 import { Badge, Button, Modal, Segmented } from "../ui";
 
-type Tab = "providers" | "models" | "engine";
+type Tab = "providers" | "models" | "roles" | "engine" | "settings";
 
 const CATEGORIES: { key: ProviderInfo["category"]; label: string }[] = [
   { key: "frontier", label: "Frontier APIs" },
@@ -18,13 +18,22 @@ const CATEGORIES: { key: ProviderInfo["category"]; label: string }[] = [
 function ProviderCard({ provider, onSaved }: { provider: ProviderInfo; onSaved: (msg: string) => void }) {
   const [key, setKey] = useState("");
   const [saving, setSaving] = useState(false);
+  const [loggingIn, setLoggingIn] = useState(false);
 
   const save = async () => {
     if (!key.trim()) return;
     setSaving(true);
     try {
-      const res = await rpc.call<{ accepted: boolean }>("setApiKey", { provider: provider.id, key: key.trim() });
-      onSaved(res.accepted ? `Key stored for ${provider.name} (this worker session)` : "The live engine is unavailable right now.");
+      const res = await rpc.call<{ accepted: boolean; providersConfigured?: number; catalog?: { providers?: ProviderInfo[]; models?: unknown[]; roles?: unknown[]; thinking?: unknown[] } }>("setApiKey", { provider: provider.id, key: key.trim() });
+      if (res.catalog) {
+        useStudio.setState((state) => ({
+          providers: (res.catalog?.providers as ProviderInfo[] | undefined) ?? state.providers,
+          models: (res.catalog?.models as typeof state.models | undefined) ?? state.models,
+          providersConfigured: res.providersConfigured ?? state.providersConfigured,
+          engine: res.accepted ? "omp" : state.engine,
+        }));
+      }
+      onSaved(res.accepted ? `Key stored for ${provider.name}; available models are now filtered to this credential.` : "The live engine is unavailable right now.");
       setKey("");
     } catch (e) {
       onSaved(e instanceof Error ? e.message : String(e));
@@ -32,6 +41,20 @@ function ProviderCard({ provider, onSaved }: { provider: ProviderInfo; onSaved: 
       setSaving(false);
     }
   };
+
+  const login = async () => {
+    setLoggingIn(true);
+    try {
+      await rpc.call("loginProvider", { provider: provider.id });
+      onSaved(`Opening ${provider.name} sign-in…`);
+    } catch (e) {
+      onSaved(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoggingIn(false);
+    }
+  };
+
+  const supportsApiKey = provider.authMethods?.includes("api-key") ?? !provider.oauth;
 
   return (
     <div className="flex items-start gap-3 rounded-xl border border-line bg-surface p-3.5">
@@ -55,7 +78,15 @@ function ProviderCard({ provider, onSaved }: { provider: ProviderInfo; onSaved: 
           {provider.modelCount} models · env <code className="rounded bg-dusk-100 px-1 py-px font-mono text-[10px]">{provider.envVar}</code>
           {provider.oauth && " · sign in with your provider account"}
         </div>
-        {!provider.oauth && (
+        {provider.oauth && (
+          <div className="mt-2 flex items-center gap-1.5">
+            <Button size="sm" variant="secondary" onClick={() => void login()} disabled={loggingIn}>
+              <ExternalLink size={12} /> {loggingIn ? "Starting…" : provider.configured ? "Reconnect" : "Sign in"}
+            </Button>
+            <span className="text-[11px] text-ink-faint">Uses omp’s native OAuth flow</span>
+          </div>
+        )}
+        {supportsApiKey && (
           <div className="mt-2 flex items-center gap-1.5">
             <input
               type="password"
@@ -124,8 +155,7 @@ function ProvidersTab({ onSaved }: { onSaved: (msg: string) => void }) {
             <ShieldCheck size={12} className="text-omp-600" />
             {configured} provider{configured === 1 ? "" : "s"} with credentials detected
           </span>
-        ) : (
-          <span>No provider credentials detected — the studio runs its demo agent until you add a key.</span>
+        ) : (            <span>No provider credentials detected — configure a provider to create a real omp session.</span>
         )}
       </div>
       <div className="grid gap-2.5 lg:grid-cols-2">
@@ -216,6 +246,104 @@ function ModelsTab() {
   );
 }
 
+function RolesTab() {
+  const roles = useStudio((s) => s.roles);
+  const models = useStudio((s) => s.models);
+  return (
+    <div className="p-4">
+      <div className="mb-3 rounded-xl border border-line bg-dusk-50/70 p-3.5 text-[12px] leading-relaxed text-ink-soft">
+        omp roles are model aliases used for specialized work. Their assignments come from the same settings model as the terminal app; only configured models appear here.
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {roles.map((role) => (
+          <div key={role.id} className="rounded-xl border border-line bg-surface p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-semibold text-[13px]">{role.name}</span>
+              <Badge tone="neutral">@{role.id}</Badge>
+            </div>
+            <p className="mt-1 text-[11.5px] text-ink-soft">{role.description}</p>
+            <div className="mt-2 truncate font-mono text-[10.5px] text-ink-faint">
+              {role.configuredModel ?? models.find((model) => model.id === role.configuredModel)?.name ?? "not assigned"}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function OmpSettingsTab() {
+  const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    void rpc.call<AppSettings>("getSettings").then(setSettings).finally(() => setLoading(false));
+  }, []);
+
+  if (loading || !settings) return <div className="p-6 text-[13px] text-ink-faint">Loading omp settings…</div>;
+  const rows = [
+    ["Theme", settings.theme ?? "light"],
+    ["Editor", settings.editor ?? "system"],
+    ["Transport", settings.transport ?? "local Bun worker"],
+    ["Compaction", settings.compaction ? "enabled" : "disabled"],
+    ["Context window", settings.contextWindow ? formatNumber(settings.contextWindow) : "model default"],
+    ["Model cycle", settings.cycleOrder?.join(" → ") ?? "smol → default → slow"],
+    ["Memory", settings.memoryBackend ?? "off"],
+  ];
+  return (
+    <div className="p-4">
+      <div className="mb-3 rounded-xl border border-line bg-dusk-50/70 p-3.5 text-[12px] leading-relaxed text-ink-soft">
+        These are the omp settings that shape model selection, context handling, memory, and interaction behavior. They mirror the terminal app’s configuration vocabulary instead of a separate wrapper-only system.
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {rows.map(([label, value]) => (
+          <div key={label} className="rounded-xl border border-line bg-surface p-3">
+            <div className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-faint">{label}</div>
+            <div className="mt-1 truncate font-mono text-[12px] text-ink">{value}</div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 rounded-xl border border-line bg-surface p-3">
+        <div className="text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Safety & interaction</div>
+        <div className="mt-2 flex flex-wrap gap-2 text-[11.5px] text-ink-soft">
+          <Badge tone={settings.autoTitle ? "green" : "neutral"}>auto title {settings.autoTitle ? "on" : "off"}</Badge>
+          <Badge tone={settings.confirmDestructiveTools ? "green" : "amber"}>confirm destructive tools</Badge>
+          <Badge tone={settings.showToolArguments ? "green" : "neutral"}>show tool arguments</Badge>
+          <Badge tone={settings.streamRules ? "green" : "neutral"}>stream rules</Badge>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OAuthPanel() {
+  const flow = useStudio((s) => s.oauthFlow);
+  const [input, setInput] = useState("");
+  if (!flow) return null;
+  const submit = async () => {
+    if (!input.trim()) return;
+    await rpc.call("submitOAuthInput", { provider: flow.provider, input: input.trim() });
+    setInput("");
+  };
+  return (
+    <div className="mx-4 mt-4 rounded-xl border border-omp-200 bg-omp-50/60 p-3.5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-[13px] font-semibold text-omp-950">Connect {flow.name}</div>
+          <div className="mt-1 text-[11.5px] leading-relaxed text-omp-900/70">{flow.progress ?? flow.instructions ?? "Continue in the provider window, then return here if a code is requested."}</div>
+        </div>
+        <a className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-omp-600 px-2.5 py-1.5 text-[12px] font-semibold text-white hover:bg-omp-700" href={flow.launchUrl ?? flow.url} target="_blank" rel="noreferrer">
+          <ExternalLink size={12} /> Open sign-in
+        </a>
+      </div>
+      <div className="mt-2.5 flex gap-1.5">
+        <input value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void submit()} placeholder="Paste code or redirect URL if asked" className="h-8 min-w-0 flex-1 rounded-lg border border-omp-200 bg-white px-2.5 text-[12px] outline-none" />
+        <Button size="sm" onClick={() => void submit()} disabled={!input.trim()}>Submit</Button>
+      </div>
+    </div>
+  );
+}
+
 function EngineTab() {
   const engine = useStudio((s) => s.engine);
   const providersConfigured = useStudio((s) => s.providersConfigured);
@@ -229,7 +357,7 @@ function EngineTab() {
           <PlugZap size={16} className="text-omp-600" />
           <span className="text-[14px] font-semibold">Engine status</span>
           <Badge tone={connected ? (engine === "omp" ? "green" : "amber") : "neutral"} className="ml-auto">
-            {connected ? (engine === "omp" ? "live · omp SDK" : "demo simulator") : "disconnected"}
+            {connected ? (providersConfigured > 0 ? "live · omp SDK" : "ready · awaiting provider") : "disconnected"}
           </Badge>
         </div>
         <p className="mt-2 text-[13px] leading-relaxed text-ink-soft">{engineHint}</p>
@@ -257,7 +385,7 @@ function EngineTab() {
           </li>
           <li className="flex items-start gap-2">
             <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-omp-600" />
-            <span>Keys pasted here are stored in-memory for this worker session only — never written to disk.</span>
+            <span>Keys pasted here are persisted by the desktop worker in its app config so they survive restarts; the web preview keeps them in the worker’s runtime key store.</span>
           </li>
           <li className="flex items-start gap-2">
             <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-omp-600" />
@@ -284,12 +412,15 @@ export function SettingsModal() {
 
   return (
     <Modal open={open} onClose={closeSettings} title={<span className="flex items-center gap-2"><Settings2 size={15} /> Settings</span>} width="max-w-4xl">
+      <OAuthPanel />
       <div className="flex gap-1 border-b border-line bg-dusk-50/60 px-3 pt-2">
         {(
           [
             { key: "providers", label: "Providers", icon: PlugZap },
             { key: "models", label: "Models", icon: ChevronDown },
+            { key: "roles", label: "Roles", icon: SlidersHorizontal },
             { key: "engine", label: "Engine", icon: Settings2 },
+            { key: "settings", label: "omp", icon: SlidersHorizontal },
           ] as { key: Tab; label: string; icon: typeof PlugZap }[]
         ).map(({ key, label, icon: Icon }) => (
           <button
@@ -306,7 +437,9 @@ export function SettingsModal() {
       </div>
       {tab === "providers" && <ProvidersTab onSaved={onSaved} />}
       {tab === "models" && <ModelsTab />}
+      {tab === "roles" && <RolesTab />}
       {tab === "engine" && <EngineTab />}
+      {tab === "settings" && <OmpSettingsTab />}
     </Modal>
   );
 }

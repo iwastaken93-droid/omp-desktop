@@ -18,7 +18,7 @@ export class RpcServer {
         case "status":
           return ok(id, {
             state: "ok",
-            engine: this.engine.isUsable() ? "omp" : "demo",
+            engine: "omp",
             providersConfigured: this.engine.getConfiguredProviders(),
             hint: this.engine.getEngineHint(),
             catalogLoaded: !this.catalog.failedToLoad,
@@ -75,9 +75,34 @@ export class RpcServer {
           const provider = str(params.provider) ?? "";
           const key = str(params.key) ?? "";
           if (!provider || !key) return err(id, 400, "provider and key are required");
-          const okLive = this.engine.setApiKey(provider, key);
-          return ok(id, { accepted: okLive, note: okLive ? "key stored (persisted on disk)" : "key ignored (live engine unavailable)" });
+          const accepted = this.engine.setApiKey(provider, key);
+          await this.engine.refreshCatalog();
+          await this.catalog.refresh();
+          return ok(id, {
+            accepted,
+            providersConfigured: this.engine.getConfiguredProviders(),
+            catalog: this.catalog.snapshot(),
+            note: accepted ? "key stored and the live omp catalog is refreshing" : "key was not accepted",
+          });
         }
+
+        case "loginProvider": {
+          const provider = str(params.provider) ?? "";
+          if (!provider) return err(id, 400, "provider is required");
+          return ok(id, await this.engine.loginProvider(provider));
+        }
+
+        case "submitOAuthInput": {
+          const provider = str(params.provider) ?? "";
+          const input = str(params.input) ?? "";
+          return ok(id, { accepted: this.engine.submitOAuthInput(provider, input) });
+        }
+
+        case "listRoles":
+          return ok(id, this.catalog.snapshot().roles);
+
+        case "setRole":
+          return ok(id, { accepted: false, message: "Roles are configured in omp settings; choose a model for this session instead." });
 
         case "setModel":
           return ok(id, this.engine.setModel(str(params.sessionId) ?? "", str(params.modelId) ?? ""));
@@ -95,6 +120,11 @@ export class RpcServer {
             showToolArguments: true,
             streamRules: true,
             memoryBackend: "off",
+            ...this.engine.getSettings(),
+            modelRoles: {
+              ...Object.fromEntries(this.catalog.snapshot().roles.map((role) => [role.id, role.configuredModel ?? "not assigned"])),
+              ...(this.engine.getSettings().modelRoles as Record<string, string> | undefined),
+            },
           });
 
         case "setSettings":
@@ -137,6 +167,6 @@ function str(v: unknown): string | undefined {
   return typeof v === "string" ? v : undefined;
 }
 
-function validThinking(v: unknown): "low" | "medium" | "high" | "ultra" | undefined {
-  return v === "low" || v === "medium" || v === "high" || v === "ultra" ? v : undefined;
+function validThinking(v: unknown): "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "auto" | undefined {
+  return v === "off" || v === "minimal" || v === "low" || v === "medium" || v === "high" || v === "xhigh" || v === "max" || v === "auto" ? v : undefined;
 }
