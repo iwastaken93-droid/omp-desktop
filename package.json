@@ -1,0 +1,28 @@
+{
+  "name": "omp-desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "OMP Studio — a clean, web-first GUI for the Oh My Pi coding agent engine.",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run scripts/dev.ts",
+    "dev:worker": "bun run --filter @omp/worker dev",
+    "dev:ui": "bun run --filter @omp/ui dev",
+    "build": "bun run --filter @omp/ui build",
+    "preview": "bun run scripts/preview.ts",
+    "typecheck": "tsc -b --noEmit",
+    "start": "bun run scripts/preview.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
+  },
+  "engines": {
+    "bun": ">=1.3.14"
+  },
+  "packageManager": "bun@1.3.14"
+}

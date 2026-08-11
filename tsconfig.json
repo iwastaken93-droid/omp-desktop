@@ -1,0 +1,33 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "types": ["bun", "vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@omp/shared": ["packages/shared/src/index.ts"],
+      "@omp/ui/*": ["packages/ui/src/*"]
+    }
+  },
+  "include": [
+    "scripts/**/*.ts",
+    "packages/shared/src/**/*.ts",
+    "packages/worker/src/**/*.ts",
+    "packages/ui/src/**/*.ts",
+    "packages/ui/src/**/*.tsx",
+    "packages/ui/vite.config.ts",
+    "packages/ui/tailwind.config.ts"
+  ]
+}

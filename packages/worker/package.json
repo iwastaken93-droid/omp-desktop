@@ -1,0 +1,20 @@
+{
+  "name": "@omp/worker",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "start": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "@oh-my-pi/pi-coding-agent": "^17.2.12",
+    "@omp/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.2"
+  }
+}

@@ -1,0 +1,279 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-canvas text-ink font-sans antialiased;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgba(34, 197, 94, 0.22);
+}
+
+/* ---------- scrollbars ---------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #d6d3d1 transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #d6d3d1;
+  border-radius: 8px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: #a8a29e;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---------- rainbow (ultrathink) ---------- */
+.rainbow-text {
+  background-image: linear-gradient(
+    90deg,
+    #ef4444,
+    #f97316,
+    #eab308,
+    #22c55e,
+    #3b82f6,
+    #8b5cf6,
+    #ec4899,
+    #ef4444
+  );
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: rainbow-slide 6s linear infinite;
+}
+
+.rainbow-glow {
+  position: relative;
+}
+.rainbow-glow::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    90deg,
+    #ef4444,
+    #f97316,
+    #eab308,
+    #22c55e,
+    #3b82f6,
+    #8b5cf6,
+    #ec4899,
+    #ef4444
+  );
+  background-size: 200% auto;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: rainbow-slide 6s linear infinite;
+  pointer-events: none;
+}
+
+.rainbow-avatar {
+  background-image: linear-gradient(
+    135deg,
+    #ef4444,
+    #f97316,
+    #eab308,
+    #22c55e,
+    #3b82f6,
+    #8b5cf6,
+    #ec4899
+  );
+  background-size: 300% 300%;
+  animation: rainbow-slide 6s linear infinite;
+}
+
+/* ---------- shimmer (busy) ---------- */
+.shimmer {
+  background: linear-gradient(
+    100deg,
+    rgba(28, 25, 23, 0.06) 40%,
+    rgba(28, 25, 23, 0.12) 50%,
+    rgba(28, 25, 23, 0.06) 60%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2.2s linear infinite;
+}
+
+/* ---------- markdown ---------- */
+.md {
+  @apply text-[15px] leading-relaxed text-ink;
+}
+.md > *:first-child {
+  margin-top: 0;
+}
+.md > *:last-child {
+  margin-bottom: 0;
+}
+.md p {
+  margin: 0.6em 0;
+}
+.md h1,
+.md h2,
+.md h3 {
+  @apply font-semibold tracking-tight;
+  margin: 1.1em 0 0.45em;
+}
+.md h1 {
+  @apply text-xl;
+}
+.md h2 {
+  @apply text-lg;
+}
+.md h3 {
+  @apply text-base;
+}
+.md ul,
+.md ol {
+  margin: 0.5em 0;
+  padding-left: 1.4em;
+}
+.md ul {
+  list-style: disc;
+}
+.md ol {
+  list-style: decimal;
+}
+.md li {
+  margin: 0.22em 0;
+}
+.md li > p {
+  margin: 0.1em 0;
+}
+.md strong {
+  @apply font-semibold text-ink;
+}
+.md a {
+  @apply text-omp-700 underline decoration-omp-300 underline-offset-2 hover:text-omp-800;
+}
+.md code {
+  @apply font-mono text-[0.86em];
+  background: rgba(28, 25, 23, 0.055);
+  border-radius: 4px;
+  padding: 0.12em 0.34em;
+}
+.md pre {
+  @apply my-3 overflow-x-auto rounded-xl border border-line bg-dusk-50;
+}
+.md pre code {
+  @apply block p-3.5 text-[13px] leading-relaxed;
+  background: transparent;
+  padding: 0.9rem 1rem;
+}
+.md blockquote {
+  @apply my-2 border-l-2 border-line-strong pl-3 text-ink-soft;
+}
+.md hr {
+  @apply my-4 border-line;
+}
+.md table {
+  @apply my-3 w-full border-collapse text-sm;
+}
+.md th,
+.md td {
+  @apply border border-line px-2.5 py-1.5 text-left;
+}
+.md th {
+  @apply bg-dusk-50 font-semibold;
+}
+
+/* light code token colors (hljs classes) */
+.hljs-comment,
+.hljs-quote {
+  color: #a8a29e;
+  font-style: italic;
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal,
+.hljs-doctag {
+  color: #9d174d;
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-addition {
+  color: #15803d;
+}
+.hljs-number,
+.hljs-symbol,
+.hljs-bullet {
+  color: #b45309;
+}
+.hljs-title,
+.hljs-section,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class {
+  color: #1d4ed8;
+}
+.hljs-type,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-class .hljs-title {
+  color: #0f766e;
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-property {
+  color: #be185d;
+}
+.hljs-meta,
+.hljs-deletion {
+  color: #b91c1c;
+}
+.hljs-emphasis {
+  font-style: italic;
+}
+.hljs-strong {
+  font-weight: 600;
+}
+.hljs-link {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+/* ---------- misc ---------- */
+.kbd {
+  @apply inline-flex min-w-[1.4rem] items-center justify-center rounded-md border border-line-strong bg-surface px-1.5 py-0.5 font-mono text-[11px] font-medium text-ink-soft shadow-card;
+}
+
+.dot-grid {
+  background-image: radial-gradient(rgba(28, 25, 23, 0.08) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+.typing-caret::after {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 15px;
+  margin-left: 3px;
+  vertical-align: -2px;
+  background: #16a34a;
+  border-radius: 1px;
+  animation: blink 1s step-end infinite;
+}
