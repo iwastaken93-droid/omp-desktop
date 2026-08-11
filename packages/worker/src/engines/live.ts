@@ -11,9 +11,9 @@ import type {
   ThinkingLevel,
   ToolCall,
 } from "@omp/shared";
-import { existsSync, readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { homedir, tmpdir } from "node:os";
 import type { AgentEngine, CreateInput, EngineEventSink, PromptInput } from "./engine";
 import { Catalog } from "../catalog";
 
@@ -62,6 +62,35 @@ export class LiveEngine implements AgentEngine {
 
   constructor(private sink: EngineEventSink) {}
 
+  // ---------- persisted API keys ----------
+
+  private keysFile(): string {
+    const dir = process.env.OMP_CONFIG_DIR || join(homedir(), ".omp-studio");
+    return join(dir, "keys.json");
+  }
+
+  private loadPersistedKeys(): void {
+    try {
+      const raw = readFileSync(this.keysFile(), "utf8");
+      const obj = JSON.parse(raw) as Record<string, unknown>;
+      for (const [provider, key] of Object.entries(obj)) {
+        if (typeof key === "string" && key.trim()) this.runtimeKeys.set(provider, key.trim());
+      }
+    } catch {
+      /* no persisted keys yet */
+    }
+  }
+
+  private persistKeys(): void {
+    try {
+      const file = this.keysFile();
+      mkdirSync(dirname(file), { recursive: true });
+      writeFileSync(file, JSON.stringify(Object.fromEntries(this.runtimeKeys), null, 2), { mode: 0o600 });
+    } catch (err) {
+      console.error("[live] failed to persist keys:", err);
+    }
+  }
+
   getEngineHint(): string {
     if (this.initError) return `live engine failed to start: ${this.initError}`;
     return "live omp engine — sessions are driven by the real @oh-my-pi/pi-coding-agent SDK.";
@@ -83,6 +112,7 @@ export class LiveEngine implements AgentEngine {
     if (this.initPromise) return this.initPromise;
     this.initPromise = (async () => {
       try {
+        this.loadPersistedKeys();
         const sdk = await import("@oh-my-pi/pi-coding-agent");
         this.sdk = sdk;
         this.authStorage = await sdk.discoverAuthStorage();
@@ -118,12 +148,18 @@ export class LiveEngine implements AgentEngine {
     const clean = key.trim();
     if (!clean) return false;
     this.runtimeKeys.set(provider, clean);
+    this.persistKeys();
     if (this.authStorage) {
       this.authStorage.setRuntimeApiKey(provider, clean);
       void this.modelRegistry?.refresh().catch(() => {});
       void this.catalog?.refresh().catch(() => {});
     }
     return true;
+  }
+
+  /** Optional-interface implementation used by the RPC layer. */
+  setApiKey(provider: string, key: string): boolean {
+    return this.setRuntimeKey(provider, key);
   }
 
   private providerEnvKeys(): string[] {

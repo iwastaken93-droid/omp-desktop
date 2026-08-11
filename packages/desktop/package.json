@@ -1,0 +1,16 @@
+{
+  "name": "@omp/desktop",
+  "private": true,
+  "version": "0.1.0",
+  "description": "OMP Studio — Windows desktop shell around the Oh My Pi worker",
+  "author": "OMP Studio",
+  "license": "MIT",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^43.3.0",
+    "electron-builder": "^26.15.3"
+  }
+}

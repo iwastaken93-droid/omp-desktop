@@ -14,7 +14,10 @@
     "build": "bun run --filter @omp/ui build",
     "preview": "bun run scripts/preview.ts",
     "typecheck": "tsc -b --noEmit",
-    "start": "bun run scripts/preview.ts"
+    "start": "bun run scripts/preview.ts",
+    "desktop:bundle": "bun run scripts/desktop-bundle.ts",
+    "desktop:win": "bun run desktop:bundle && cd packages/desktop && ./node_modules/.bin/electron-builder --win",
+    "desktop:icon": "bun run scripts/gen-icon.ts"
   },
   "devDependencies": {
     "@types/bun": "^1.2.2",

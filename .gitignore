@@ -1,5 +1,8 @@
 node_modules/
 dist/
+desktop-resources/
+packages/desktop/dist/
+*.tgz
 .turbo/
 *.log
 *.tsbuildinfo

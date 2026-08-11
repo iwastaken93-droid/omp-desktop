@@ -1,5 +1,5 @@
 import { existsSync, statSync } from "node:fs";
-import { extname, join, normalize } from "node:path";
+import { extname, isAbsolute, join, normalize } from "node:path";
 import type { ServerWebSocket } from "bun";
 import type { RpcNotification, RpcRequest, RpcResponse } from "@omp/shared";
 import { Catalog } from "./catalog";
@@ -9,7 +9,11 @@ import { LiveEngine } from "./engines/live";
 import { RpcServer } from "./rpc";
 
 const PROJECT_ROOT = process.env.OMP_PROJECT_ROOT || process.cwd();
-const STATIC_DIR = process.env.STATIC_DIR ? join(PROJECT_ROOT, process.env.STATIC_DIR) : null;
+const STATIC_DIR = (() => {
+  const raw = process.env.STATIC_DIR;
+  if (!raw) return null;
+  return isAbsolute(raw) ? raw : join(PROJECT_ROOT, raw);
+})();
 const PORT = Number(process.env.PORT || process.env.WORKER_PORT || 8787);
 
 const MIME: Record<string, string> = {

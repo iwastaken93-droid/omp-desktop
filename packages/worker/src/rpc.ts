@@ -76,7 +76,7 @@ export class RpcServer {
           const key = str(params.key) ?? "";
           if (!provider || !key) return err(id, 400, "provider and key are required");
           const okLive = this.engine.setApiKey(provider, key);
-          return ok(id, { accepted: okLive, note: okLive ? "key stored for this worker session" : "key ignored (live engine unavailable)" });
+          return ok(id, { accepted: okLive, note: okLive ? "key stored (persisted on disk)" : "key ignored (live engine unavailable)" });
         }
 
         case "setModel":

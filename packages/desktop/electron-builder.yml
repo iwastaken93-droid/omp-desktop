@@ -1,0 +1,37 @@
+appId: sh.omp.studio
+productName: OMP Studio
+copyright: Copyright © 2026 OMP Studio
+
+directories:
+  output: dist
+  buildResources: build
+
+files:
+  - main.js
+
+extraResources:
+  - from: ../../desktop-resources
+    to: omp-resources
+    filter:
+      - "**/*"
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+  icon: build/icon.png
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  shortcutName: OMP Studio
+  artifactName: OMP-Studio-Setup-${version}.${ext}
+
+portable:
+  artifactName: OMP-Studio-${version}-portable.${ext}
+
+electronLanguages:
+  - en-US
