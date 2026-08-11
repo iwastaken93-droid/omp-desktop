@@ -97,8 +97,8 @@ native addon, so the full engine — including native grep, tokenizers, and the 
 
 ```sh
 bun install
-bun run desktop:win          # → packages/desktop/dist/OMP-Studio-Setup-0.1.0.exe
-                             #   packages/desktop/dist/OMP-Studio-0.1.0-portable.exe
+bun run desktop:win          # → packages/desktop/dist/OMP-Studio-Setup-0.1.1.exe
+                             #   packages/desktop/dist/OMP-Studio-0.1.1-portable.exe
 ```
 
 `desktop:win` runs `desktop-bundle.ts` (builds the UI, bundles the worker to a single

@@ -1,7 +1,7 @@
 {
   "name": "omp-desktop",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "OMP Studio — a clean, web-first GUI for the Oh My Pi coding agent engine.",
   "type": "module",
   "workspaces": [

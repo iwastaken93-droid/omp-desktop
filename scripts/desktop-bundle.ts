@@ -84,7 +84,7 @@ run([
 ]);
 writeFileSync(
   join(out, "worker", "package.json"),
-  JSON.stringify({ name: "omp-worker", private: true, version: "0.1.0", type: "module" }, null, 2),
+  JSON.stringify({ name: "omp-worker", private: true, version: "0.1.1", type: "module" }, null, 2),
 );
 
 // 3. Native addon packages ----------------------------------------------------
